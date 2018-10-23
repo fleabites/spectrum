@@ -11,7 +11,7 @@
 #include <string.h>
 #include <signal.h>
 #include <stdio.h>
-#include <complex.h>
+
 #include <fftw3.h>
 #include <math.h>
 #include <float.h>
@@ -31,8 +31,8 @@
 #define GHZ(x) ((long long)(x*1000000000.0 + .5))
 
 #define AVERAGES 10;
-#define FREQ1 MHZ(6);
-#define FREQ2 MHZ(3);
+#define FREQ1 MHZ(5);
+#define FREQ2 MHZ(0);
 #define NORUNS 6;
 
 #define ASSERT(expr) { \
@@ -356,7 +356,7 @@ int main (int argc, char **argv)
 				cnt++;
 			}
 			// Print data to file
-			fprintf(fp2, "%d,%d\n", i, q);
+			//fprintf(fp2, "%d,%d\n", i, q);
 		}
 
 		fftw_execute(plan);
@@ -395,7 +395,7 @@ int main (int argc, char **argv)
 			((int16_t *)p_dat)[1] = qpart;
 
 			// Save what's actually in the TX buffer to file
-			fprintf(fp1, "%d,%d\n", ((int16_t*)p_dat)[0], ((int16_t*)p_dat)[1]);
+			//fprintf(fp1, "%d,%d\n", ((int16_t*)p_dat)[0], ((int16_t*)p_dat)[1]);
 
 			i += 1. / txcfg.fs_hz;
 		}
