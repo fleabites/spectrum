@@ -1,20 +1,9 @@
 /*
- * libiio - AD9361 IIO streaming example
- *
- * Copyright (C) 2014 IABG mbH
- * Author: Michael Feilen <feilen_at_iabg.de>
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- **/
+ * David Scott
+ * Spectrum analyser for AD9361 using libiio
+ * Power Spectrum
+ * Adapted from libiio - AD9361 IIO streaming example
+*/
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -40,10 +29,24 @@
 #define MHZ(x) ((long long)(x*1000000.0 + .5))
 #define GHZ(x) ((long long)(x*1000000000.0 + .5))
 
-#define AVERAGES 10;
-#define FREQ1 MHZ(6);
-#define FREQ2 MHZ(3);
+/* user config for testing purposes */
+#define AVERAGES 10;		// Number of FFT averages to take
+#define FREQ1 MHZ(8);		// Frequency of 1st TX test sinusoidal
+#define FREQ2 MHZ(0);   // Frequency of 2st TX test sinusoidal
 #define NORUNS 6;
+
+// Receive chain settings
+#define RX_BW MHZ(19.365); // ~20 MHz rf bandwidth
+#define RX_FS MHZ(30.72);  // ~30 MS/s rx sample rate
+#define RX_LO GHZ(1);			 // 1 GHz rf frequency
+// Transmit chain settings
+#define TX_BW MHZ(19.365);
+#define TX_FS MHZ(30.72);
+#define TX_LO GHZ(1);
+// Buffer settings
+#define BUFFER_SIZE 1024*1024;
+// FFT settings
+#define FFT_SIZE 1024*1024; //16384;
 
 #define ASSERT(expr) { \
 	if (!(expr)) { \
@@ -192,6 +195,7 @@ bool cfg_ad9361_streaming_ch(struct iio_context *ctx, struct stream_cfg *cfg, en
 	return true;
 }
 
+// Demuxes incoming samples (convert to native format), currently not used
 static ssize_t demux_sample(const struct iio_channel *chn, void *sample, size_t size, void *d){
 	double val;
 
@@ -200,6 +204,7 @@ static ssize_t demux_sample(const struct iio_channel *chn, void *sample, size_t 
 	return size;
 }
 
+// Used by TX thread in generation of sine wave
 float dither(float f)
 {
 	float r1 = (float)rand() / (float)RAND_MAX;
@@ -208,6 +213,7 @@ float dither(float f)
 	return f + (r1 - r2) * 16.0f;
 }
 
+// Seperate thread for TX chain, currently not used
 void tx_thread(){
 	int16_t *buf, *sine;
 	int i;
@@ -226,7 +232,7 @@ void tx_thread(){
 	}
 }
 
-/* simple configuration and streaming */
+/* main entry point */
 int main (int argc, char **argv)
 {
 	// TX thread
@@ -260,18 +266,18 @@ int main (int argc, char **argv)
 	signal(SIGINT, handle_sig);
 
 	// RX stream config
-	rxcfg.bw_hz = MHZ(19.366);   	// 20 MHz rf bandwidth
-	rxcfg.fs_hz = MHZ(30.72);     // 30 MS/s rx sample rate
-	rxcfg.lo_hz = GHZ(1);   			// 1 GHz rf frequency
+	rxcfg.bw_hz = RX_BW;
+	rxcfg.fs_hz = RX_FS;
+	rxcfg.lo_hz = RX_LO;
 	rxcfg.rfport = "A_BALANCED"; // port A (select for rf freq.)
 
 	// Print some device information
 	printf("*RX settings\n  Bandwidth: %lld Hz\n  Baseband Sample rate: %lld Hz\n  LO frequency: %lld Hz\n", rxcfg.bw_hz, rxcfg.fs_hz, rxcfg.lo_hz);
 
 	// TX stream config
-	txcfg.bw_hz = MHZ(19.365); 	// 20 MHz rf bandwidth
-	txcfg.fs_hz = MHZ(30.72);   // 30 MS/s tx sample rate
-	txcfg.lo_hz = GHZ(1); 			// 1 GHz rf frequency
+	txcfg.bw_hz = TX_BW;
+	txcfg.fs_hz = TX_FS;
+	txcfg.lo_hz = TX_LO;
 	txcfg.rfport = "A"; // port A (select for rf freq.)
 
 	printf("* Acquiring IIO context\n");
@@ -301,7 +307,7 @@ int main (int argc, char **argv)
 	iio_channel_enable(tx0_i);
 	iio_channel_enable(tx0_q);
 
-	int buffer_size = 1024 * 1024;
+	int buffer_size = BUFFER_SIZE;
 
 	printf("* Creating non-cyclic IIO buffers with 1 MiS\n");
 	rxbuf = iio_device_create_buffer(rx, buffer_size, false);
@@ -316,7 +322,7 @@ int main (int argc, char **argv)
 	}
 
 	// configure fft
-  fft_size = 16384;	// 32768; Same size as iio_buffer
+  fft_size = FFT_SIZE;
 	in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*fft_size);
 	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*fft_size);
 	out_data = malloc(sizeof(double)*fft_size);
@@ -324,8 +330,8 @@ int main (int argc, char **argv)
 
 	printf("* Starting IO streaming (press CTRL+C to cancel)\n");
 
-	fp1 = fopen("output.csv", "w+");
-	fp2 = fopen("input.csv", "w+");
+	//fp1 = fopen("output.csv", "w+");
+	//fp2 = fopen("input.csv", "w+");
 	// Create TX thread
 	//pthread_create (&tx_th, NULL, (void*) &tx_thread, NULL);
 	count = NORUNS;
@@ -364,7 +370,7 @@ int main (int argc, char **argv)
 				cnt++;
 			}
 			// Print data to file
-			fprintf(fp2, "%d,%d\n", i, q);
+			//fprintf(fp2, "%d,%d\n", i, q);
 		}
 
 		fftw_execute(plan);
@@ -423,7 +429,7 @@ int main (int argc, char **argv)
 			((int16_t *)p_dat)[1] = qpart;
 
 			// Save what's actually in the TX buffer to file
-			fprintf(fp1, "%d,%d\n", ((int16_t*)p_dat)[0], ((int16_t*)p_dat)[1]);
+			//fprintf(fp1, "%d,%d\n", ((int16_t*)p_dat)[0], ((int16_t*)p_dat)[1]);
 
 			i += 1. / txcfg.fs_hz;
 		}
@@ -438,8 +444,8 @@ int main (int argc, char **argv)
 	// thread_info = pthread_join(tx_th, &res);
   // if (thread_info != 0)
   // 	printf("pthread_join error\n");
-	fclose(fp1);
-	fclose(fp2);
+	//fclose(fp1);
+	//fclose(fp2);
 	fftw_destroy_plan(plan);
 	fftw_free(in);
 	fftw_free(out);
