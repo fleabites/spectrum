@@ -1,20 +1,10 @@
 /*
- * libiio - AD9361 IIO streaming example
+ * David Scott
+ * Spectrum analyser for AD9361 using libiio
+ * No power spectrum in this version, just a raw FFT
+ * Adapted from libiio - AD9361 IIO streaming example
  *
- * Copyright (C) 2014 IABG mbH
- * Author: Michael Feilen <feilen_at_iabg.de>
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- **/
+*/
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -192,6 +182,7 @@ bool cfg_ad9361_streaming_ch(struct iio_context *ctx, struct stream_cfg *cfg, en
 	return true;
 }
 
+// Demux the incoming samples, currently unused
 static ssize_t demux_sample(const struct iio_channel *chn, void *sample, size_t size, void *d){
 	double val;
 
@@ -200,6 +191,7 @@ static ssize_t demux_sample(const struct iio_channel *chn, void *sample, size_t 
 	return size;
 }
 
+// Used to generate sine wave in TX thread
 float dither(float f)
 {
 	float r1 = (float)rand() / (float)RAND_MAX;
@@ -208,6 +200,7 @@ float dither(float f)
 	return f + (r1 - r2) * 16.0f;
 }
 
+// Seperate thread for transmission chain, currently unused
 void tx_thread(){
 	int16_t *buf, *sine;
 	int i;
@@ -226,14 +219,14 @@ void tx_thread(){
 	}
 }
 
-/* simple configuration and streaming */
+/* Main entry point */
 int main (int argc, char **argv)
 {
 	// TX thread
 	//pthread_t tx_th;
 	//int thread_info;
 	//void *res;
-	int cnt, count;
+	int cnt;
 
 	// File to dump data
 	FILE *fp1, *fp2, *fp3;
@@ -253,25 +246,24 @@ int main (int argc, char **argv)
 	ssize_t fft_size;
 	fftw_complex *in, *out;
 	fftw_plan plan;
-	double avg, mag;
-	double *out_data;
+	//double mag;
 
 	// Listen to ctrl+c and ASSERT
 	signal(SIGINT, handle_sig);
 
 	// RX stream config
 	rxcfg.bw_hz = MHZ(19.366);   	// 20 MHz rf bandwidth
-	rxcfg.fs_hz = MHZ(30.72);     // 30 MS/s rx sample rate
-	rxcfg.lo_hz = GHZ(1);   			// 1 GHz rf frequency
+	rxcfg.fs_hz = MHZ(30.72);     // 5 MS/s rx sample rate
+	rxcfg.lo_hz = GHZ(1);   // 2.5 GHz rf frequency
 	rxcfg.rfport = "A_BALANCED"; // port A (select for rf freq.)
 
 	// Print some device information
 	printf("*RX settings\n  Bandwidth: %lld Hz\n  Baseband Sample rate: %lld Hz\n  LO frequency: %lld Hz\n", rxcfg.bw_hz, rxcfg.fs_hz, rxcfg.lo_hz);
 
 	// TX stream config
-	txcfg.bw_hz = MHZ(19.365); 	// 20 MHz rf bandwidth
-	txcfg.fs_hz = MHZ(30.72);   // 30 MS/s tx sample rate
-	txcfg.lo_hz = GHZ(1); 			// 1 GHz rf frequency
+	txcfg.bw_hz = MHZ(19.365); 	// 1 MHz rf bandwidth
+	txcfg.fs_hz = MHZ(30.72);   // 5 MS/s tx sample rate
+	txcfg.lo_hz = GHZ(1); // 2.5 GHz rf frequency
 	txcfg.rfport = "A"; // port A (select for rf freq.)
 
 	printf("* Acquiring IIO context\n");
@@ -316,10 +308,9 @@ int main (int argc, char **argv)
 	}
 
 	// configure fft
-  fft_size = 16384;	// 32768; Same size as iio_buffer
+  fft_size = 32768; //16384;	// Same size as iio_buffer
 	in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*fft_size);
 	out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex)*fft_size);
-	out_data = malloc(sizeof(double)*fft_size);
 	plan = fftw_plan_dft_1d(fft_size, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
 
 	printf("* Starting IO streaming (press CTRL+C to cancel)\n");
@@ -328,9 +319,9 @@ int main (int argc, char **argv)
 	fp2 = fopen("input.csv", "w+");
 	// Create TX thread
 	//pthread_create (&tx_th, NULL, (void*) &tx_thread, NULL);
-	count = NORUNS;
 
-	while (!stop && count > 0){
+	while (!stop)
+	{
 		ssize_t nbytes_rx, nbytes_tx;
 		char *p_dat, *p_end;
 		ptrdiff_t p_inc;
@@ -360,7 +351,8 @@ int main (int argc, char **argv)
 
 			// Copy captured data into fftw3 in buffer
 			if ( cnt < fft_size ){
-				in[cnt] = i + q*I;
+				in[0][cnt] = i;
+				in[1][cnt] = q;
 				cnt++;
 			}
 			// Print data to file
@@ -368,9 +360,6 @@ int main (int argc, char **argv)
 		}
 
 		fftw_execute(plan);
-		avg = AVERAGES;
-		if (avg && avg != 128 )
-			avg = 1.0f / avg;
 
 		// Sample counter increment and status output
 		nrx += nbytes_rx / iio_device_get_sample_size(rx);
@@ -379,26 +368,9 @@ int main (int argc, char **argv)
 
 		fp3 = fopen("fft.csv", "w");
 		for(cnt = 0; cnt<fft_size; cnt++){
-			//mag = 10*log10( (creal(out[cnt]) * creal(out[cnt]) + cimag(out[cnt]) * cimag(out[cnt])) / ((unsigned long long)fft_size * fft_size));
-			mag = 20*log10( abs(out[cnt]) );
-			if (out_data[cnt] == FLT_MAX) {
-				/* Don't average the first iteration */
-				 out_data[cnt] = mag;
-			} else if (!avg) {
-				/* keep peaks */
-				if (out_data[cnt] <= mag)
-					out_data[cnt] = mag;
-			} else if (avg == 128) {
-				/* keep min */
-				if (out_data[cnt] >= mag)
-					out_data[cnt] = mag;
-			} else {
-				/* do an average */
-				out_data[cnt] = ((1 - avg) * out_data[cnt]) + (avg * mag);
-			}
 			//fprintf(fp3, "%lf,%lf\n", out[0][cnt], out[1][cnt]);
-			//fprintf(fp3, "%lf\n", 10*log10( (out[0][cnt]*out[0][cnt] + out[1][cnt]*out[1][cnt]) / (fft_size*fft_size) ) );
-			fprintf(fp3, "%lf %lf\n", cnt*(((double)txcfg.bw_hz/(buffer_size))/(fft_size)), out_data[cnt]);
+			fprintf(fp3, "%lf,%lf\n", out[0][cnt], out[1][cnt] );
+			//fprintf(fp3, "%lf\n", 10*log10( (creal(out[cnt]) * creal(out[cnt]) + cimag(out[cnt]) * cimag(out[cnt])) / ((unsigned long long)fft_size * fft_size) );
 
 		}
 		fclose(fp3);
@@ -407,17 +379,17 @@ int main (int argc, char **argv)
 		p_inc = iio_buffer_step(txbuf);
 		p_end = iio_buffer_end(txbuf);
 
-		float freq1 = 2.0 * M_PI * FREQ1; // sine wave (should be easy to spot);
-		float freq2 = 2.0 * M_PI * FREQ2; // sine wave (should be easy to spot);
+		float freq1 = 2.0 * M_PI * 10e6; // sine wave (should be easy to spot);
+		float freq2 = 2.0 * M_PI * 5e6; // sine wave (should be easy to spot);
 
-		double ampl = 2048;
+		double ampl = 128;
 
 		double i = 1. / txcfg.fs_hz;
 
 		for (p_dat = iio_buffer_first(txbuf, tx0_i); p_dat < p_end; p_dat += p_inc) {
 			// fill with sine wave
-			short ipart = ampl * sin(freq1 * i) + ampl * sin(freq2 * i);
-			short qpart = ampl * cos(freq1 * i) + ampl * cos(freq2 * i);
+			short ipart = ampl * sin(freq1 * i);// + ampl * sin(freq2 * i);
+			short qpart = ampl * cos(freq1 * i);// + ampl * cos(freq2 * i);
 
 			((int16_t *)p_dat)[0] = ipart;
 			((int16_t *)p_dat)[1] = qpart;
@@ -427,7 +399,6 @@ int main (int argc, char **argv)
 
 			i += 1. / txcfg.fs_hz;
 		}
-		count--;
 	}
 
 	// thread_info = pthread_cancel(tx_th);
