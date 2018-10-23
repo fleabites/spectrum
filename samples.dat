@@ -1,0 +1,16 @@
+Usage:
+	iio_readdev [-n <hostname>] [-u <vid>:<pid>] [-t <trigger>] [-b <buffer-size>] [-s <samples>] <iio_device> [<channel> ...]
+
+Options:
+	-h, --help
+			Show this help and quit.
+	-n, --network
+			Use the network backend with the provided hostname.
+	-u, --usb
+			Use the USB backend with the device that matches the given VID/PID.
+	-t, --trigger
+			Use the specified trigger.
+	-b, --buffer-size
+			Size of the capture buffer. Default is 256.
+	-s, --samples
+			Number of samples to capture, 0 = infinite. Default is 0.
