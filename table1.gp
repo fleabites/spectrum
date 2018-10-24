@@ -23,7 +23,7 @@ unset key
 
 #set key samplen 2 #spacing 3.5 font ",14"
 #set key font ",20"
-plot 'fft-1.txt' u 1:2  w lines
+plot 'fft-1.txt' w lines
 
 #datafile = 'standard_results_data'
 #plot for [i=0:*] datafile index i using 1:2\

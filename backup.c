@@ -30,35 +30,29 @@
 #define GHZ(x) ((long long)(x*1000000000.0 + .5))
 
 /* user config for testing purposes */
-#define FREQ1 MHZ(5)		// Frequency of 1st TX test sinusoidal
-#define NORUNS 10				// Number of times to run signal
+#define FREQ1 MHZ(8.5)		// Frequency of 1st TX test sinusoidal
+#define NORUNS 10				// Number of times to run signal captupe
 
 // Receive chain settings
-#define RX_BW MHZ(19.365)  // ~20 MHz rf bandwidth
-#define RX_FS MHZ(30.72) 	 // ~30.72 MS/s rx sample rate
+#define RX_BW MHZ(19.366)  // ~20 MHz rf bandwidth
+#define RX_FS MHZ(30.72)   // ~30 MS/s rx sample rate
 #define RX_LO GHZ(1)			 // 1 GHz rf frequency
 // Transmit chain settings
 #define TX_BW MHZ(19.365)
 #define TX_FS MHZ(30.72)
 #define TX_LO GHZ(1)
 // Buffer settings
-#define BUFFER_SIZE 1024*1024 //2097152 //16384 //1024*1024
+#define BUFFER_SIZE 16384
 // FFT settings
-#define FFT_SIZE 1024*1024
+#define FFT_SIZE 16384
 
 /*
-	 Calculating the freq range per bin:
+	 Calculating the freq range per bin example:
 	 Sampling rate is 30.72 MHz (max of Nano?) therefore Nyquist means can sample up to
    30.72/2 = 15.36MHz signals
 	 Number of FFT bins Samples/2 = 1024*1024/2 = 524,288 bins
 	 15.36MHz / 524,288 bins = 29.296875 Hz per bin resolution
 	 Simpler: bin resolution = FS / N = 30.72e6 / (1024*1024) = 29.296875 Hz/bin
-
-	 The frequency resolution f_res,  is equal to the reciprocal of your time window duration T_win.
-	 So if you have M samples going into the FFT and the sampling period is T seconds, then T_win = M*T,
-	 thus f_res = 1/(M*T).
-	 So the frequency of the kth bin (in Hz), where k = 0 corresponds to dc, w
-	 ill be k/(M*T) or (k/M)*F_s, if F_s is the sampling frequency, with F_s = 1/T.
 */
 #define ASSERT(expr) { \
 	if (!(expr)) { \
@@ -254,7 +248,7 @@ int main (int argc, char **argv)
 	int cnt, count;
 
 	// File to dump data
-	FILE *fp1, *fp2;
+	//FILE *fp1, *fp2;
 	FILE *fp3;
 	char buf[0x100]; // hold filename
 
@@ -346,12 +340,12 @@ int main (int argc, char **argv)
 
 	printf("* Starting IO streaming (press CTRL+C to cancel)\n");
 
-
+	//fp1 = fopen("output.csv", "w+");
+	//fp2 = fopen("input.csv", "w+");
 	// Create TX thread
 	//pthread_create (&tx_th, NULL, (void*) &tx_thread, NULL);
 	count = NORUNS;
 
-fp2 = fopen("input.csv", "w+");
 	while (!stop && count > 0){
 		ssize_t nbytes_rx, nbytes_tx;
 		char *p_dat, *p_end;
@@ -373,7 +367,6 @@ fp2 = fopen("input.csv", "w+");
 		// Convert to native format
 		iio_buffer_foreach_sample(rxbuf, demux_sample, NULL);
 
-
 		// Dump received data to file for analysis
 		cnt = 0;
 		for (p_dat = (char *)iio_buffer_first(rxbuf, rx0_i); p_dat < p_end; p_dat += p_inc) {
@@ -387,7 +380,7 @@ fp2 = fopen("input.csv", "w+");
 				cnt++;
 			}
 			// Print data to file
-			fprintf(fp2, "%d,%d\n", i, q);
+			//fprintf(fp2, "%d,%d\n", i, q);
 		}
 
 		fftw_execute(plan);
@@ -404,8 +397,6 @@ fp2 = fopen("input.csv", "w+");
 			//mag = 10*log10( (creal(out[cnt]) * creal(out[cnt]) + cimag(out[cnt]) * cimag(out[cnt])) / ((unsigned long long)fft_size * fft_size));
 			mag = 20*log10( cabs(out[cnt]) );
 			// Shift FFT
-			// out_data[cnt] = mag;
-			// out_freq[cnt] = (RX_BW/FFT_SIZE)*cnt;
 			if (cnt >= fft_size/2){
 				out_data[cnt - fft_size/2] = mag;
 				out_freq[cnt - fft_size/2] = -(RX_BW/FFT_SIZE)*(fft_size/2 -cnt);
@@ -425,11 +416,10 @@ fp2 = fopen("input.csv", "w+");
 
 		float freq1 = 2.0 * M_PI * FREQ1; // sine wave (should be easy to spot);
 
-		double ampl = 32767;
+		double ampl = 8192;
 
 		double i = 1. / txcfg.fs_hz;
 
-		fp1 = fopen("output.csv", "w+");
 		for (p_dat = iio_buffer_first(txbuf, tx0_i); p_dat < p_end; p_dat += p_inc) {
 			// fill with sine wave
 			short ipart = ampl * sin(freq1 * i);
@@ -439,11 +429,10 @@ fp2 = fopen("input.csv", "w+");
 			((int16_t *)p_dat)[1] = qpart;
 
 			// Save what's actually in the TX buffer to file
-			fprintf(fp1, "%d,%d\n", ((int16_t*)p_dat)[0], ((int16_t*)p_dat)[1]);
+			//fprintf(fp1, "%d,%d\n", ((int16_t*)p_dat)[0], ((int16_t*)p_dat)[1]);
 
 			i += 1. / txcfg.fs_hz;
 		}
-		fclose(fp1);
 		count--;
 	}
 
@@ -456,7 +445,9 @@ fp2 = fopen("input.csv", "w+");
   // if (thread_info != 0)
   // 	printf("pthread_join error\n");
 	printf("* Shutting down\n");
-	fclose(fp2);
+	//fclose(fp1);
+	//fclose(fp2);
+
 	fftw_destroy_plan(plan);
 	fftw_free(in);
 	fftw_free(out);

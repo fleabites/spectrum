@@ -1,7 +1,7 @@
 #!/usr/bin/env gnuplot
 
 set terminal png
-set output 'fft-01.png' 
+set output 'fft-08.png' 
 set title 'Frequency Spectrum' 
 set xlabel 'Frequency (Hz)' 
 set ylabel "Amplitude"
@@ -23,7 +23,7 @@ unset key
 
 #set key samplen 2 #spacing 3.5 font ",14"
 #set key font ",20"
-plot 'fft-1.txt' u 1:2  w lines
+plot 'fft-8.txt' w lines
 
 #datafile = 'standard_results_data'
 #plot for [i=0:*] datafile index i using 1:2\
