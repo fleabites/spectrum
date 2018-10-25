@@ -56,11 +56,11 @@
 
 /* Test signal settings */
 #define FREQ1 MHZ(1)
-#define FREQ2 MHZ(10)
-#define FREQ3 MHZ(29)
-#define AMP1 1024
-#define AMP2 1024
-#define AMP3 1024
+#define FREQ2 MHZ(4)
+#define FREQ3 MHZ(7)
+#define AMP1 384
+#define AMP2 384
+#define AMP3 384
 
 /* RX Spectrum settings */
 #define START_SWEEP GHZ(1)

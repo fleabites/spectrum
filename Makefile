@@ -37,7 +37,7 @@ ad9361-iiostream : ad9361-iiostream.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -lm
 
 ad9361-iiostream-spectrum : ad9361-iiostream-spectrum.o
-		$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -lfftw3 -lpthread -lm
+		$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -lfftw3 -lpthread -lm -g
 
 ad9371-iiostream : ad9371-iiostream.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)

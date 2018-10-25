@@ -1,4 +1,4 @@
-#!/usr/bin/env gnuplot
+_rx!/usr/bin/env gnuplot
 
 set terminal epslatex "enhanced" color size 15.9cm,10cm
 set output "standard_results.tex"
